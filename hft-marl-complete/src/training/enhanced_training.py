@@ -190,18 +190,30 @@ class TrainingLogger:
 class DataManager:
     """Manages data preparation and feature engineering"""
     
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: TrainingConfig, logger: logging.Logger = None):
         self.config = config
         self.data_path = Path(config.data_path)
         self.features_path = Path(config.features_path)
+        self.logger = logger or logging.getLogger(__name__)
         
-    def prepare_data(self) -> bool:
-        """Prepare all necessary data for training"""
+        # Import data processing modules
+        sys.path.append(str(Path(__file__).parent.parent))
+        
+    def prepare_data(self, force_rebuild: bool = False) -> bool:
+        """
+        Prepare all necessary data for training.
+        
+        Args:
+            force_rebuild: If True, rebuild features even if they exist
+            
+        Returns:
+            True if successful, False otherwise
+        """
         self.logger.info("Preparing data for training...")
         
         # Check if features exist
-        if not self.features_path.exists():
-            self.logger.info("Features not found. Running feature engineering...")
+        if not self.features_path.exists() or force_rebuild:
+            self.logger.info("Features not found or rebuild forced. Running feature engineering...")
             return self._run_feature_engineering()
         
         # Check if features are up to date
@@ -217,71 +229,212 @@ class DataManager:
             self.logger.info(f"Missing feature files: {missing_files}")
             return self._run_feature_engineering()
         
-        self.logger.info("Data preparation completed.")
+        self.logger.info("Data preparation completed - using existing features.")
         return True
     
     def _run_feature_engineering(self) -> bool:
-        """Run feature engineering pipeline"""
+        """Run the complete feature engineering pipeline"""
         try:
-            # This would call the actual feature engineering scripts
-            # For now, we'll create dummy data
-            self._create_dummy_features()
+            self.logger.info("Starting feature engineering pipeline...")
+            
+            # Check if we have raw data or need to create synthetic data
+            interim_dir = self.data_path / "interim"
+            snapshots_file = interim_dir / "snapshots.parquet"
+            
+            if not snapshots_file.exists():
+                self.logger.warning("No raw data found. Creating synthetic data for testing...")
+                self._create_synthetic_market_data()
+            
+            # Run feature engineering
+            self._build_features()
+            
+            # Create train/val/test datasets
+            self._create_datasets()
+            
+            self.logger.info("Feature engineering pipeline completed successfully")
             return True
+            
         except Exception as e:
-            self.logger.error(f"Feature engineering failed: {e}")
+            self.logger.error(f"Feature engineering failed: {e}", exc_info=True)
             return False
     
-    def _create_dummy_features(self):
-        """Create dummy features for testing"""
+    def _create_synthetic_market_data(self):
+        """
+        Create synthetic market data for testing when real data is not available.
+        Generates realistic-looking orderbook snapshots.
+        """
+        self.logger.info("Generating synthetic market data...")
+        
+        interim_dir = self.data_path / "interim"
+        interim_dir.mkdir(parents=True, exist_ok=True)
+        
+        np.random.seed(self.config.seed)
+        
+        # Generate 30 days of data at 100ms intervals
+        n_days = 30
+        samples_per_day = int((24 * 60 * 60 * 1000) / 100)  # 100ms intervals
+        n_samples = n_days * samples_per_day
+        
+        # Generate timestamps
+        start_date = pd.Timestamp('2020-01-01', tz='UTC')
+        timestamps = pd.date_range(start=start_date, periods=n_samples, freq='100ms')
+        
+        # Generate realistic price process (geometric Brownian motion)
+        initial_price = 100.0
+        volatility = 0.02
+        dt = 100 / (1000 * 60 * 60 * 24)  # 100ms in days
+        
+        returns = np.random.normal(0, volatility * np.sqrt(dt), n_samples)
+        log_prices = np.cumsum(returns) + np.log(initial_price)
+        mid_prices = np.exp(log_prices)
+        
+        # Generate spreads (correlated with volatility)
+        spreads = np.abs(np.random.normal(0.02, 0.01, n_samples)) * mid_prices
+        spreads = np.clip(spreads, 0.01, 0.5)
+        
+        # Generate bid/ask prices
+        best_bids = mid_prices - spreads / 2
+        best_asks = mid_prices + spreads / 2
+        
+        # Generate quantities (Pareto-distributed)
+        bid_qtys = np.random.pareto(2, n_samples) * 100 + 10
+        ask_qtys = np.random.pareto(2, n_samples) * 100 + 10
+        
+        # Create DataFrame
+        df = pd.DataFrame({
+            'ts': timestamps,
+            'symbol': 'SYMA',
+            'best_bid': best_bids,
+            'best_ask': best_asks,
+            'bid_qty_1': bid_qtys,
+            'ask_qty_1': ask_qtys,
+        })
+        
+        # Save to interim directory
+        snapshots_file = interim_dir / "snapshots.parquet"
+        df.to_parquet(snapshots_file, index=False)
+        
+        self.logger.info(f"Generated {len(df)} synthetic market snapshots -> {snapshots_file}")
+    
+    def _build_features(self):
+        """Build features from raw market data"""
+        self.logger.info("Building features from market data...")
+        
+        from features.build_features import (
+            add_basic_features, add_technical_features, 
+            compute_scaler, apply_scaler
+        )
+        
+        # Load interim data
+        interim_dir = self.data_path / "interim"
+        snapshots_file = interim_dir / "snapshots.parquet"
+        
+        df = pd.read_parquet(snapshots_file)
+        self.logger.info(f"Loaded {len(df)} market snapshots")
+        
+        # Add basic features
+        df = add_basic_features(df)
+        
+        # Add technical features
+        windows = {'fast': 10, 'slow': 30}
+        df = add_technical_features(df, windows)
+        
+        # Define feature columns
+        base_features = ['best_bid', 'best_ask', 'spread', 'imbalance', 'microprice', 
+                        'bid_qty_1', 'ask_qty_1', 'mid_price']
+        tech_features = [col for col in df.columns if any(
+            pattern in col for pattern in ['volatility_', 'ma_', 'volume_']
+        )]
+        feature_cols = [col for col in base_features + tech_features if col in df.columns]
+        
+        # Compute and apply scaler
+        scaler = compute_scaler(df, feature_cols, method='robust')
+        df = apply_scaler(df, scaler)
+        
+        # Save features and scaler
         self.features_path.mkdir(parents=True, exist_ok=True)
         
-        # Create dummy feature data
-        np.random.seed(self.config.seed)
-        n_samples = 10000
-        n_features = 8
-        n_timesteps = 20
+        features_file = self.features_path / "features.parquet"
+        df.to_parquet(features_file, index=False)
         
-        # Generate synthetic market data
-        X = np.random.randn(n_samples, n_timesteps, n_features).astype(np.float32)
-        y = np.random.randn(n_samples).astype(np.float32)
-        timestamps = np.arange(n_samples, dtype=np.int64)
+        scaler_file = self.features_path / "scaler.json"
+        with open(scaler_file, 'w') as f:
+            json.dump(scaler, f, indent=2)
         
-        # Save data splits
-        splits = {
-            'dev': (0, 6000),
-            'val': (6000, 8000),
-            'test': (8000, 10000)
-        }
+        self.logger.info(f"Features saved to {features_file}")
+        self.logger.info(f"Scaler saved to {scaler_file}")
+    
+    def _create_datasets(self):
+        """Create train/val/test dataset splits"""
+        self.logger.info("Creating dataset splits...")
         
-        for split_name, (start, end) in splits.items():
-            split_data = {
-                'X': X[start:end],
-                'y': y[start:end],
-                'ts': timestamps[start:end]
+        from data.make_dataset import split_by_date, to_tensors
+        
+        # Load features
+        features_file = self.features_path / "features.parquet"
+        df = pd.read_parquet(features_file)
+        
+        # Define splits (use available data if not enough for configured splits)
+        if 'ts' in df.columns:
+            df['ts'] = pd.to_datetime(df['ts'])
+            min_date = df['ts'].min()
+            max_date = df['ts'].max()
+            
+            # Calculate split dates
+            date_range = (max_date - min_date).days
+            
+            splits = {
+                'dev': {
+                    'start': min_date,
+                    'end': min_date + pd.Timedelta(days=int(date_range * 0.6))
+                },
+                'val': {
+                    'start': min_date + pd.Timedelta(days=int(date_range * 0.6)),
+                    'end': min_date + pd.Timedelta(days=int(date_range * 0.8))
+                },
+                'test': {
+                    'start': min_date + pd.Timedelta(days=int(date_range * 0.8)),
+                    'end': max_date
+                }
             }
-            np.savez_compressed(
-                self.features_path / f"{split_name}_tensors.npz",
-                **split_data
-            )
+        else:
+            # If no timestamps, split by row count
+            n_samples = len(df)
+            splits = {
+                'dev': {'start': 0, 'end': int(n_samples * 0.6)},
+                'val': {'start': int(n_samples * 0.6), 'end': int(n_samples * 0.8)},
+                'test': {'start': int(n_samples * 0.8), 'end': n_samples}
+            }
         
-        # Save scaler
-        scaler = {
-            'median': np.zeros(n_features).tolist(),
-            'iqr': np.ones(n_features).tolist()
-        }
+        # Split and save datasets
+        history_T = 20
         
-        with open(self.features_path / "scaler.json", 'w') as f:
-            json.dump(scaler, f)
-        
-        self.logger.info("Dummy features created successfully.")
+        for split_name, split_range in splits.items():
+            if 'ts' in df.columns:
+                mask = (df['ts'] >= split_range['start']) & (df['ts'] <= split_range['end'])
+                split_df = df[mask].reset_index(drop=True)
+            else:
+                split_df = df.iloc[split_range['start']:split_range['end']].reset_index(drop=True)
+            
+            if len(split_df) <= history_T:
+                self.logger.warning(f"Skipping {split_name}: insufficient data ({len(split_df)} <= {history_T})")
+                continue
+            
+            tensors = to_tensors(split_df, history_T=history_T)
+            
+            output_file = self.features_path / f"{split_name}_tensors.npz"
+            np.savez_compressed(output_file, **tensors)
+            
+            self.logger.info(f"Created {split_name} dataset: {len(tensors['X'])} samples -> {output_file}")
 
 
 class EnvironmentManager:
     """Manages environment creation and configuration"""
     
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: TrainingConfig, logger: logging.Logger = None):
         self.config = config
-        self.data_manager = DataManager(config)
+        self.logger = logger or logging.getLogger(__name__)
+        self.data_manager = DataManager(config, logger=self.logger)
     
     def create_environment(self, split: str = "dev") -> EnhancedCTDEHFTEnv:
         """Create training environment"""
@@ -695,7 +848,7 @@ class EnhancedTrainingPipeline:
     def __init__(self, config: TrainingConfig):
         self.config = config
         self.logger = TrainingLogger(config)
-        self.env_manager = EnvironmentManager(config)
+        self.env_manager = EnvironmentManager(config, logger=self.logger.logger)
         
         # Create results directory
         self.results_path = Path(config.results_path)

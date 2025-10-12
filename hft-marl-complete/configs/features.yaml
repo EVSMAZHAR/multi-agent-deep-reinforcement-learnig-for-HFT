@@ -1,0 +1,55 @@
+# Feature Engineering Configuration
+# ==================================
+# Adapted from hft-marl-phase0 for hft-marl-complete
+
+# Orderbook depth levels to use
+K_levels: 10
+
+# Historical window length (number of timesteps)
+history_T: 20
+
+# Decision interval in milliseconds
+decision_ms: 100
+
+# Window sizes for technical indicators (in milliseconds)
+windows:
+  # Order flow imbalance window
+  ofi_ms: 1000
+  # Realized volatility window
+  realised_vol_ms: 2000
+  # Fast moving average
+  fast: 10
+  # Slow moving average
+  slow: 30
+
+# Auxiliary features to compute
+aux:
+  - spread
+  - microprice
+  - imbalance
+  - mid_price
+  - returns
+  - volatility_fast
+  - volatility_slow
+  - spread_ma_fast
+  - spread_ma_slow
+  - imbalance_ma_fast
+  - imbalance_ma_slow
+  - volume_ma_fast
+  - volume_ma_slow
+
+# Scaler configuration
+scaler:
+  # Type: 'robust' (median/IQR) or 'standard' (mean/std)
+  type: robust
+  # Fit on which split
+  fit_on: dev
+
+# Data paths
+paths:
+  # Features directory
+  features: "data/features"
+  # Interim data directory
+  interim: "data/interim"
+  # Processed data directory
+  processed: "data/processed"
