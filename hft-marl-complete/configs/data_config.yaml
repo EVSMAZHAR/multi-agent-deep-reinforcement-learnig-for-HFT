@@ -1,0 +1,65 @@
+# Data Collection and Feature Engineering Configuration
+# =====================================================
+
+# Timezone and symbols
+timezone: UTC
+symbols:
+  - SYMA
+  - SYMB
+
+# Timing configuration
+decision_ms: 100
+tick_ms: 100
+
+# Path configuration
+paths:
+  sim: "data/sim"
+  raw: "data/raw"
+  interim: "data/interim"
+  features: "data/features"
+  processed: "data/processed"
+
+# Data splits configuration
+splits:
+  dev:
+    start: "2025-01-01"
+    end: "2025-01-08"
+  val:
+    start: "2025-01-08"
+    end: "2025-01-10"
+  test:
+    start: "2025-01-10"
+    end: "2025-01-13"
+
+# Feature engineering parameters
+features:
+  K_levels: 10
+  history_T: 20
+  windows:
+    ofi_ms: 1000
+    realised_vol_ms: 2000
+  
+  # Auxiliary features to compute
+  aux_features:
+    - spread
+    - microprice
+    - imbalance
+    - trade_intensity
+    - cancel_intensity
+
+# Scaling configuration
+scaling:
+  method: robust  # robust, standard, minmax
+  by: symbol_regime  # global, symbol, symbol_regime
+  
+# Scaler configuration
+scaler:
+  type: robust
+  fit_on: dev  # train/dev split
+
+# Simulation parameters
+simulation:
+  num_snapshots: 10000
+  seed: 42
+  use_abides: true
+  use_jaxlob: true

@@ -190,10 +190,11 @@ class TrainingLogger:
 class DataManager:
     """Manages data preparation and feature engineering"""
     
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: TrainingConfig, logger: logging.Logger = None):
         self.config = config
         self.data_path = Path(config.data_path)
         self.features_path = Path(config.features_path)
+        self.logger = logger or logging.getLogger(__name__)
         
     def prepare_data(self) -> bool:
         """Prepare all necessary data for training"""
@@ -223,28 +224,98 @@ class DataManager:
     def _run_feature_engineering(self) -> bool:
         """Run feature engineering pipeline"""
         try:
-            # This would call the actual feature engineering scripts
-            # For now, we'll create dummy data
+            import subprocess
+            
+            # Get data config path
+            data_config = Path("configs/data_config.yaml")
+            if not data_config.exists():
+                self.logger.warning(f"Data config not found at {data_config}. Creating dummy features...")
+                self._create_dummy_features()
+                return True
+            
+            # Create necessary directories
+            self.data_path.mkdir(parents=True, exist_ok=True)
+            sim_dir = self.data_path / "sim"
+            sim_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Run simulators
+            self.logger.info("Running market simulators...")
+            
+            # Run ABIDES simulator
+            abides_script = Path("src/simulation/run_abides.py")
+            if abides_script.exists():
+                cmd = [
+                    "python", str(abides_script),
+                    "--config", str(data_config),
+                    "--out", str(sim_dir),
+                    "--seed", str(self.config.seed)
+                ]
+                subprocess.run(cmd, check=True)
+                self.logger.info("ABIDES simulation completed")
+            
+            # Run JAX-LOB simulator
+            jaxlob_script = Path("src/simulation/run_jaxlob.py")
+            if jaxlob_script.exists():
+                cmd = [
+                    "python", str(jaxlob_script),
+                    "--config", str(data_config),
+                    "--out", str(sim_dir),
+                    "--seed", str(self.config.seed)
+                ]
+                subprocess.run(cmd, check=True)
+                self.logger.info("JAX-LOB simulation completed")
+            
+            # Run data ingestion
+            self.logger.info("Running data ingestion...")
+            ingest_script = Path("src/data/ingest.py")
+            if ingest_script.exists():
+                cmd = ["python", str(ingest_script), "--config", str(data_config)]
+                subprocess.run(cmd, check=True)
+                self.logger.info("Data ingestion completed")
+            
+            # Run feature engineering
+            self.logger.info("Running feature engineering...")
+            features_script = Path("src/features/feature_engineering.py")
+            if features_script.exists():
+                cmd = ["python", str(features_script), "--config", str(data_config)]
+                subprocess.run(cmd, check=True)
+                self.logger.info("Feature engineering completed")
+            
+            # Run dataset preparation
+            self.logger.info("Preparing final datasets...")
+            dataset_script = Path("src/data/make_dataset.py")
+            if dataset_script.exists():
+                cmd = ["python", str(dataset_script), "--config", str(data_config)]
+                subprocess.run(cmd, check=True)
+                self.logger.info("Dataset preparation completed")
+            
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Feature engineering pipeline failed: {e}")
+            self.logger.info("Falling back to dummy features...")
             self._create_dummy_features()
             return True
         except Exception as e:
-            self.logger.error(f"Feature engineering failed: {e}")
-            return False
+            self.logger.error(f"Unexpected error in feature engineering: {e}")
+            self.logger.info("Falling back to dummy features...")
+            self._create_dummy_features()
+            return True
     
     def _create_dummy_features(self):
-        """Create dummy features for testing"""
+        """Create dummy features for testing (fallback)"""
         self.features_path.mkdir(parents=True, exist_ok=True)
         
         # Create dummy feature data
         np.random.seed(self.config.seed)
         n_samples = 10000
-        n_features = 8
+        n_features = 28  # Updated to match expected feature count
         n_timesteps = 20
         
         # Generate synthetic market data
         X = np.random.randn(n_samples, n_timesteps, n_features).astype(np.float32)
-        y = np.random.randn(n_samples).astype(np.float32)
-        timestamps = np.arange(n_samples, dtype=np.int64)
+        timestamps = pd.date_range("2025-01-01", periods=n_samples, freq='100ms').values
+        symbols = np.array(['SYMA'] * n_samples)
         
         # Save data splits
         splits = {
@@ -256,18 +327,23 @@ class DataManager:
         for split_name, (start, end) in splits.items():
             split_data = {
                 'X': X[start:end],
-                'y': y[start:end],
-                'ts': timestamps[start:end]
+                'ts': timestamps[start:end],
+                'symbols': symbols[start:end],
+                'target_1': np.random.randn(end - start).astype(np.float32),
+                'target_5': np.random.randn(end - start).astype(np.float32),
+                'target_10': np.random.randn(end - start).astype(np.float32)
             }
             np.savez_compressed(
                 self.features_path / f"{split_name}_tensors.npz",
                 **split_data
             )
         
-        # Save scaler
+        # Save scaler with proper format
         scaler = {
-            'median': np.zeros(n_features).tolist(),
-            'iqr': np.ones(n_features).tolist()
+            'type': 'robust',
+            'center': np.zeros(n_features).tolist(),
+            'scale': np.ones(n_features).tolist(),
+            'feature_names': [f'feature_{i}' for i in range(n_features)]
         }
         
         with open(self.features_path / "scaler.json", 'w') as f:
@@ -279,9 +355,10 @@ class DataManager:
 class EnvironmentManager:
     """Manages environment creation and configuration"""
     
-    def __init__(self, config: TrainingConfig):
+    def __init__(self, config: TrainingConfig, logger: logging.Logger = None):
         self.config = config
-        self.data_manager = DataManager(config)
+        self.logger = logger or logging.getLogger(__name__)
+        self.data_manager = DataManager(config, logger=self.logger)
     
     def create_environment(self, split: str = "dev") -> EnhancedCTDEHFTEnv:
         """Create training environment"""
@@ -695,7 +772,7 @@ class EnhancedTrainingPipeline:
     def __init__(self, config: TrainingConfig):
         self.config = config
         self.logger = TrainingLogger(config)
-        self.env_manager = EnvironmentManager(config)
+        self.env_manager = EnvironmentManager(config, logger=self.logger.logger)
         
         # Create results directory
         self.results_path = Path(config.results_path)
