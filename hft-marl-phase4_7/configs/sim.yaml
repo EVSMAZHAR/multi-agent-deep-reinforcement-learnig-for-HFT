@@ -1,0 +1,16 @@
+symbols:
+- SYMA
+tick_size: 0.01
+lot_size: 100
+abides:
+  days: 3
+  seed: 42
+  spread_target_bps: 5
+  depth_profile: balanced
+jaxlob:
+  books: 64
+  depth_levels: 10
+  volatility:
+  - 0.8
+  - 1.2
+output: data/sim

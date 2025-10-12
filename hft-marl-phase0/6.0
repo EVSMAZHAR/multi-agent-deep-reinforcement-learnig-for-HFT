@@ -1,0 +1,5 @@
+Collecting pyyaml
+  Using cached PyYAML-6.0.2-cp310-cp310-win_amd64.whl.metadata (2.1 kB)
+Downloading PyYAML-6.0.2-cp310-cp310-win_amd64.whl (161 kB)
+Installing collected packages: pyyaml
+Successfully installed pyyaml-6.0.2

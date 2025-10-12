@@ -1,0 +1,17 @@
+seeds:
+- 100
+- 200
+- 300
+metrics:
+- pnl
+- sharpe
+- sortino
+- maxdd
+- cvar
+- inventory_var
+- participation
+confidence: 0.95
+baselines:
+- a_stoikov
+- ppo_single
+- rule_based

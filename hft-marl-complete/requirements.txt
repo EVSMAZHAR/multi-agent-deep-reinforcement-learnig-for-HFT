@@ -1,0 +1,58 @@
+# Core Dependencies
+numpy>=1.26.0
+pandas>=2.2.0
+pyarrow>=15.0.0
+scipy>=1.11.0
+pyyaml>=6.0.0
+matplotlib>=3.8.0
+seaborn>=0.13.0
+
+# Deep Learning
+torch>=2.2.0
+torchvision>=0.17.0
+torchaudio>=2.2.0
+
+# Reinforcement Learning
+gymnasium>=0.29.0
+stable-baselines3>=2.2.0
+
+# Experiment Tracking
+mlflow>=2.12.0
+wandb>=0.16.0
+
+# High-Frequency Trading
+abides-markets>=1.8.0
+jax>=0.4.28
+jaxlib>=0.4.28
+
+# Data Processing
+scikit-learn>=1.4.0
+tqdm>=4.66.0
+
+# Statistical Analysis
+statsmodels>=0.14.0
+
+# Visualization
+plotly>=5.17.0
+bokeh>=3.3.0
+
+# Utilities
+click>=8.1.0
+rich>=13.7.0
+colorama>=0.4.6
+
+# Development Dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+black>=23.11.0
+flake8>=6.1.0
+mypy>=1.7.0
+
+# Jupyter
+jupyter>=1.0.0
+ipykernel>=6.26.0
+ipywidgets>=8.1.0
+
+# Optional GPU support
+# torch-audio>=2.2.0  # Uncomment if using audio features
+# tensorboard>=2.15.0  # Uncomment for TensorBoard logging

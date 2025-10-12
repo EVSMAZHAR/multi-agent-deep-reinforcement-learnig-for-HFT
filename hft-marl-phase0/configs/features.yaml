@@ -1,0 +1,24 @@
+K_levels: 10
+history_T: 20
+decision_ms: 100
+windows:
+  ofi_ms: 1000
+  realised_vol_ms: 2000
+aux:
+- spread
+- microprice
+- imbalance
+- trade_intensity
+- cancel_intensity
+scaler:
+  type: robust
+  fit_on: train
+paths:
+  features: "data/features"
+  interim: "data/interim"
+  processed: "data/processed"
+
+   
+
+
+

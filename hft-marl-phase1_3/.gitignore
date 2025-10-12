@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+/data/*
+!/data/**/.gitkeep
+/models/*
+/logs/*
+/notebooks/*
+/reports/*
+.DS_Store
+mlruns/
+wandb/

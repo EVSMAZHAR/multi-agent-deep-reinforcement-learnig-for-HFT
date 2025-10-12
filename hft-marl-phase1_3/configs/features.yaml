@@ -1,0 +1,20 @@
+K_levels: 10
+history_T: 20
+decision_ms: 100
+windows:
+  ofi_ms: 1000
+  realised_vol_ms: 2000
+  intensity_ms: 1000
+  queue_ms: 2000
+aux:
+- spread
+- microprice
+- imbalance
+- ofi
+- rv
+- trade_intensity
+- cancel_intensity
+- queue_proxy
+scaler:
+  type: robust
+  fit_on: train

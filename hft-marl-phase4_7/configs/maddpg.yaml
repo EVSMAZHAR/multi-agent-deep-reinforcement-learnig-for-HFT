@@ -1,0 +1,16 @@
+algo: MADDPG
+seed: 123
+gamma: 0.99
+tau: 0.005
+lr_actor: 0.001
+lr_critic: 0.001
+replay_size: 500000
+warmup_steps: 10000
+total_steps: 100000
+batch_size: 256
+policy_delay: 2
+noise_sigma: 0.2
+noise_sigma_final: 0.05
+episode_len: 1000
+paths:
+  features: data/features

@@ -1,0 +1,83 @@
+# Enhanced Training Configuration for Multi-Agent High-Frequency Trading
+# ======================================================================
+
+# Experiment Settings
+experiment_name: "hft-marl-comprehensive"
+run_name: null  # Will be auto-generated if null
+seed: 42
+device: "cuda"  # or "cpu"
+
+# Data Settings
+data_path: "data"
+features_path: "data/features"
+models_path: "models"
+results_path: "results"
+
+# Training Settings
+algorithm: "maddpg"  # "maddpg" or "mappo"
+total_episodes: 10000
+eval_frequency: 100
+save_frequency: 500
+
+# Environment Settings
+episode_length: 1000
+num_agents: 2
+agent_types: ["market_maker", "market_taker"]
+
+# MADDPG Configuration
+maddpg_config:
+  lr_actor: 0.0001
+  lr_critic: 0.001
+  gamma: 0.99
+  tau: 0.005
+  batch_size: 256
+  buffer_size: 1000000
+  update_frequency: 1
+  num_updates: 1
+  noise_scale: 0.1
+  noise_decay: 0.9995
+  noise_min: 0.01
+  hidden_dims: [256, 256, 128]
+  activation: "relu"
+  dropout: 0.1
+  use_prioritized_replay: true
+  use_double_q: true
+  use_spectral_norm: false
+  use_layer_norm: true
+  gradient_clip: 1.0
+  risk_penalty_weight: 0.1
+  inventory_penalty_weight: 0.05
+  max_inventory: 1000.0
+
+# MAPPO Configuration
+mappo_config:
+  lr_actor: 0.0003
+  lr_critic: 0.0003
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_epsilon: 0.2
+  entropy_coef: 0.01
+  value_coef: 0.5
+  epochs: 4
+  batch_size: 64
+  steps_per_update: 2048
+  max_grad_norm: 0.5
+  hidden_dims: [256, 256, 128]
+  activation: "relu"
+  dropout: 0.1
+  use_adaptive_lr: true
+  use_layer_norm: true
+  use_attention: false
+  use_spectral_norm: false
+  risk_penalty_weight: 0.1
+  inventory_penalty_weight: 0.05
+  max_inventory: 1000.0
+
+# Evaluation Settings
+eval_episodes: 100
+baseline_comparison: true
+
+# Logging Settings
+log_level: "INFO"
+use_mlflow: true
+mlflow_tracking_uri: "file:./mlruns"

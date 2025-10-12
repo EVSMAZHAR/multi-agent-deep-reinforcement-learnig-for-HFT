@@ -1,0 +1,15 @@
+algo: MAPPO
+seed: 123
+gamma: 0.99
+gae_lambda: 0.95
+clip_epsilon: 0.15
+entropy_coef: 0.02
+lr_actor: 0.0003
+lr_critic: 0.0003
+batch_trajectories: 32
+epochs: 4
+max_steps: 200000
+reward_weights:
+  lambda_inv: 0.5
+  kappa_imp: 0.2
+  eta_cvar: 0.3

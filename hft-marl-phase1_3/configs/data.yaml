@@ -1,0 +1,22 @@
+timezone: UTC
+symbols:
+- SYMA
+decision_ms: 100
+paths:
+  sim: data/sim
+  raw: data/raw
+  interim: data/interim
+  features: data/features
+splits:
+  dev:
+    start: '2025-01-01'
+    end: '2025-01-07'
+  val:
+    start: '2025-01-08'
+    end: '2025-01-10'
+  test:
+    start: '2025-01-11'
+    end: '2025-01-13'
+scaling:
+  method: robust
+  by: symbol_regime
