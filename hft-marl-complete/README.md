@@ -39,43 +39,40 @@ A comprehensive implementation of multi-agent reinforcement learning algorithms 
 ```
 hft-marl-complete/
 ├── src/
-│   ├── data/                       # Data collection modules
-│   │   ├── ingest.py               # Raw data ingestion
-│   │   └── make_dataset.py         # Dataset creation
+│   ├── sim/                        # Market simulation
+│   │   ├── run_abides.py          # ABIDES-like simulator
+│   │   └── run_jaxlob.py          # JAX-LOB-like simulator
+│   ├── data/                       # Data processing
+│   │   ├── ingest.py              # Data ingestion
+│   │   └── make_dataset.py        # Dataset preparation
 │   ├── features/                   # Feature engineering
-│   │   └── build_features.py       # Feature computation
+│   │   └── build_features.py      # Feature builder
 │   ├── marl/
-│   │   ├── env_enhanced.py         # Enhanced CTDE environment
+│   │   ├── env_enhanced.py        # Enhanced CTDE environment
 │   │   └── policies/
-│   │       ├── enhanced_maddpg.py  # Enhanced MADDPG implementation
-│   │       └── enhanced_mappo.py   # Enhanced MAPPO implementation
+│   │       ├── enhanced_maddpg.py # Enhanced MADDPG implementation
+│   │       └── enhanced_mappo.py  # Enhanced MAPPO implementation
 │   ├── baselines/
 │   │   └── comprehensive_baselines.py  # Baseline strategies
 │   ├── evaluation/
 │   │   └── comprehensive_evaluation.py # Evaluation framework
 │   └── training/
-│       └── enhanced_training.py    # Training pipeline
+│       └── enhanced_training.py   # Training pipeline
 ├── configs/
-│   ├── data.yaml                   # Data collection config
-│   ├── features.yaml               # Feature engineering config
-│   ├── training_config.yaml        # Training configuration
-│   └── environment_config.yaml     # Environment configuration
-├── scripts/
-│   └── prepare_data.sh             # Data pipeline script
-├── data/                           # Data directory
-│   ├── sim/                        # Raw simulator data
-│   ├── interim/                    # Processed snapshots
-│   └── features/                   # Engineered features
-├── models/                         # Trained models
-├── results/                        # Experiment results
-├── logs/                           # Training logs
-├── tests/                          # Test suite
-│   └── test_data_pipeline.py       # Data pipeline tests
-├── main.py                         # Main entry point
-├── requirements.txt                # Dependencies
-├── DATA_PIPELINE.md                # Data pipeline docs
-├── INTEGRATION_SUMMARY.md          # Integration details
-└── README.md                       # This file
+│   ├── data_pipeline.yaml         # Data pipeline configuration
+│   ├── features.yaml              # Feature engineering configuration
+│   ├── training_config.yaml       # Training configuration
+│   └── environment_config.yaml    # Environment configuration
+├── data/                          # Data directory
+│   ├── sim/                       # Raw simulator output
+│   ├── interim/                   # Intermediate data
+│   └── features/                  # Engineered features & tensors
+├── models/                        # Trained models
+├── results/                       # Experiment results
+├── logs/                          # Training logs
+├── main.py                        # Main entry point
+├── requirements.txt               # Dependencies
+└── README.md                      # This file
 ```
 
 ## 🛠️ Installation
@@ -97,28 +94,32 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-4. **Setup directories**:
+4. **Prepare training data**:
 ```bash
-python main.py train --episodes 1  # This will create necessary directories
+python main.py prepare-data  # This will generate synthetic market data and features
 ```
 
 ## 🚀 Quick Start
 
-### 1. Prepare Data (Optional)
+### 1. Prepare Training Data
 
-The training pipeline automatically prepares data, but you can do it manually:
-
+First, generate and prepare the training data:
 ```bash
-# Automatic pipeline execution (recommended)
-./scripts/prepare_data.sh
-
-# Or run individual steps
-python src/data/ingest.py --config configs/data.yaml
-python src/features/build_features.py --config configs/features.yaml
-python src/data/make_dataset.py --config configs/data.yaml
+python main.py prepare-data --config configs/data_pipeline.yaml
 ```
 
-**Note**: If no raw data exists, synthetic market data will be generated automatically.
+This command will:
+- Run market simulators (ABIDES and JAX-LOB) to generate synthetic order book data
+- Ingest and consolidate market snapshots
+- Engineer trading features (spread, imbalance, microprice, etc.)
+- Create training-ready time-series tensors
+
+The data preparation pipeline generates:
+- `data/sim/*_snapshots*.parquet` - Raw market snapshots
+- `data/interim/snapshots.parquet` - Consolidated snapshots
+- `data/features/features.parquet` - Engineered features
+- `data/features/scaler.json` - Feature scaling parameters
+- `data/features/*_tensors.npz` - Training-ready tensors (format: [N, T, F])
 
 ### 2. Train a Model
 
@@ -160,6 +161,75 @@ python main.py baseline --strategy momentum --episodes 100
 
 ```bash
 python main.py compare --models models/maddpg_final.pt models/mappo_final.pt --episodes 100
+```
+
+## 📊 Data Pipeline
+
+The data pipeline consists of four stages:
+
+### Stage 1: Market Simulation
+Generate synthetic order book snapshots using two simulators:
+- **ABIDES Simulator**: Ornstein-Uhlenbeck price process with realistic market dynamics
+- **JAX-LOB Simulator**: Jump-diffusion price process with tight spreads
+
+Configuration in `configs/data_pipeline.yaml`:
+```yaml
+symbols: ['SYMA']
+num_samples: 10000
+tick_ms: 100
+volatility: 0.02
+spread_target_bps: 5
+```
+
+### Stage 2: Data Ingestion
+Consolidate raw market snapshots from multiple simulators:
+- Merge snapshots from different sources
+- Sort by symbol and timestamp
+- Remove duplicates
+- Output: `data/interim/snapshots.parquet`
+
+### Stage 3: Feature Engineering
+Extract trading features from raw market data:
+- **Basic features**: spread, imbalance, microprice
+- **Technical indicators**: returns, volatility, price components
+- **Robust scaling**: Median and IQR-based normalization
+- Output: `data/features/features.parquet`, `data/features/scaler.json`
+
+Engineered features (12 total):
+- `best_bid`, `best_ask` - Top of book prices
+- `bid_qty_1`, `ask_qty_1` - Top of book quantities
+- `spread` - Best ask - best bid
+- `imbalance` - Order book imbalance
+- `microprice` - Volume-weighted mid-price
+- `mid_price` - Simple mid-price
+- `returns` - Price returns
+- `volatility` - Rolling volatility
+- `bid_value`, `ask_value` - Price × quantity
+
+### Stage 4: Dataset Preparation
+Create time-series tensors for training:
+- **Sliding window**: History of T=20 timesteps
+- **Format**: [N, T, F] where N=samples, T=timesteps, F=features
+- **Data splits**: train/dev/val/test by date ranges
+- Output: `data/features/*_tensors.npz`
+
+### Running Individual Pipeline Steps
+
+You can also run each step individually:
+
+```bash
+# Step 1: Generate market data
+python -m src.sim.run_abides --config configs/data_pipeline.yaml --out data/sim
+python -m src.sim.run_jaxlob --config configs/data_pipeline.yaml --out data/sim
+
+# Step 2: Ingest data
+python -m src.data.ingest --config configs/data_pipeline.yaml
+
+# Step 3: Build features
+python -m src.features.build_features --config configs/data_pipeline.yaml
+
+# Step 4: Prepare datasets
+python -m src.data.make_dataset --config configs/data_pipeline.yaml
 ```
 
 ## 📊 Configuration

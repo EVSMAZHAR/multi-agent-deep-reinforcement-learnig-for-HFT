@@ -1,6 +1,7 @@
 """
-Data Collection and Processing Module
-======================================
+Data Processing Module
+======================
 
-This module handles data ingestion and dataset preparation for training.
+Utilities for data ingestion and dataset preparation, converting
+market snapshots into training-ready tensors.
 """

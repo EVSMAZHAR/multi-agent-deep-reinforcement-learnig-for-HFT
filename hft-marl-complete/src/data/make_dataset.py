@@ -1,167 +1,154 @@
 """
-Dataset Creation Module
-=======================
+Dataset Preparation Module
+==========================
 
-Creates train/val/test splits and prepares tensors for training.
-Adapted from hft-marl-phase0 for compatibility with enhanced environment.
+Converts engineered features into training-ready tensors with time-series format
+compatible with EnhancedCTDEHFTEnv.
+
+Expected output format:
+- X: [N, T, F] - N samples, T timesteps history, F features
+- y: [N] - Target values (optional, for supervised tasks)
+- ts: [N] - Timestamps for each sample
 """
 
 import argparse
-import yaml
 from pathlib import Path
-import pandas as pd
-import numpy as np
-import logging
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+import numpy as np
+import pandas as pd
+import yaml
 
 
 def split_by_date(df: pd.DataFrame, splits: dict) -> dict:
-    """
-    Split data by date ranges.
-    
-    Args:
-        df: DataFrame with timestamp column
-        splits: Dictionary with split names and date ranges
-        
-    Returns:
-        Dictionary of split DataFrames
-    """
-    parts = {}
-    
+    """Split data by date ranges with basic logging."""
+    parts: dict[str, pd.DataFrame] = {}
+    if 'ts' in df.columns and not pd.api.types.is_datetime64_any_dtype(df['ts']):
+        df = df.copy()
+        df['ts'] = pd.to_datetime(df['ts'])
     for name, rng in splits.items():
-        logger.info(f"Creating {name} split: {rng['start']} to {rng['end']}")
-        
-        # Convert timestamps if needed
-        if 'ts' in df.columns:
-            if not pd.api.types.is_datetime64_any_dtype(df['ts']):
-                df['ts'] = pd.to_datetime(df['ts'])
-        
-        # Create mask for date range
-        start_date = pd.Timestamp(rng['start'])
-        end_date = pd.Timestamp(rng['end'])
-        mask = (df['ts'] >= start_date) & (df['ts'] <= end_date)
-        
+        start = pd.Timestamp(rng['start'])
+        end = pd.Timestamp(rng['end'])
+        mask = (df['ts'] >= start) & (df['ts'] <= end)
         parts[name] = df.loc[mask].reset_index(drop=True)
-        logger.info(f"{name} split: {len(parts[name])} rows")
-    
+        print(f"  {name:>5}: {len(parts[name]):>6} rows ({start.date()} to {end.date()})")
     return parts
 
 
 def create_sequences(df: pd.DataFrame, history_T: int, feature_cols: list) -> np.ndarray:
+    """Create sequences for temporal modeling with window length history_T.
+
+    Produces N = len(df) - history_T sequences of shape [history_T, F].
     """
-    Create sequences for temporal modeling.
-    
-    Args:
-        df: DataFrame with features
-        history_T: Number of historical timesteps
-        feature_cols: List of feature column names
-        
-    Returns:
-        Array of shape [N, T, F] where N=samples, T=timesteps, F=features
-    """
-    logger.info(f"Creating sequences with history_T={history_T}")
-    
-    # Extract feature values
     features = df[feature_cols].values.astype(np.float32)
-    n_samples, n_features = features.shape
-    
-    # Create sequences
+    n_samples = features.shape[0]
+    if n_samples <= history_T:
+        return np.zeros((0, history_T, len(feature_cols)), dtype=np.float32)
+
     sequences = []
     for i in range(history_T, n_samples):
-        seq = features[i-history_T:i, :]
-        sequences.append(seq)
-    
-    X = np.array(sequences, dtype=np.float32)
-    logger.info(f"Created sequences with shape: {X.shape}")
-    
-    return X
+        sequences.append(features[i - history_T:i, :])
+    return np.asarray(sequences, dtype=np.float32)
 
 
 def to_tensors(df: pd.DataFrame, history_T: int = 20) -> dict:
-    """
-    Convert DataFrame to tensor format for training.
-    
-    Args:
-        df: DataFrame with engineered features
-        history_T: Number of historical timesteps
-        
-    Returns:
-        Dictionary with tensors
-    """
-    # Define feature columns (must match what build_features creates)
+    """Convert DataFrame to tensor dict using a default feature set."""
     feature_cols = [
         'best_bid', 'best_ask', 'spread', 'imbalance', 'microprice',
         'bid_qty_1', 'ask_qty_1', 'mid_price'
     ]
-    
-    # Filter to available columns
-    available_cols = [col for col in feature_cols if col in df.columns]
-    logger.info(f"Using features: {available_cols}")
-    
-    # Create sequences
-    X = create_sequences(df, history_T, available_cols)
-    
-    # Create targets (next period returns if available)
-    if 'returns' in df.columns:
+    feature_cols = [c for c in feature_cols if c in df.columns]
+
+    X = create_sequences(df, history_T, feature_cols)
+
+    if 'returns' in df.columns and len(df) > history_T:
         y = df['returns'].iloc[history_T:].values.astype(np.float32)
+        y = y[: len(X)]
     else:
         y = np.zeros(len(X), dtype=np.float32)
-    
-    # Get timestamps
-    if 'ts' in df.columns:
-        timestamps = df['ts'].iloc[history_T:].values
+
+    if 'ts' in df.columns and len(df) > history_T:
+        ts = df['ts'].iloc[history_T:].values[: len(X)]
     else:
-        timestamps = np.arange(len(X), dtype=np.int64)
-    
-    return {
-        "X": X,
-        "y": y,
-        "ts": timestamps
-    }
+        ts = np.arange(len(X), dtype=np.int64)
+
+    return {"X": X, "y": y, "ts": ts}
+
+
+def create_time_series_tensors(df: pd.DataFrame, feature_cols: list, history_T: int = 20) -> dict:
+    """Create time-series tensors with sliding window, N = len(df) - history_T."""
+    feature_data = df[feature_cols].astype(np.float32).values
+    timestamps = df['ts'].values if 'ts' in df.columns else np.arange(len(df))
+
+    N = len(df) - history_T
+    F = len(feature_cols)
+    if N <= 0:
+        raise ValueError(f"Not enough data for history_T={history_T}. Need > {history_T} rows.")
+
+    X = np.zeros((N, history_T, F), dtype=np.float32)
+    ts = np.zeros(N, dtype='datetime64[ns]') if np.issubdtype(timestamps.dtype, np.datetime64) else np.zeros(N, dtype=np.int64)
+
+    for i in range(N):
+        X[i] = feature_data[i:i + history_T]
+        ts[i] = timestamps[i + history_T - 1]
+
+    if 'returns' in df.columns and len(df) > history_T:
+        y = df['returns'].iloc[history_T:].values.astype(np.float32)
+        y = y[:N]
+    else:
+        y = np.zeros(N, dtype=np.float32)
+
+    return {"X": X, "y": y, "ts": ts}
 
 
 def main():
-    """Main entry point for dataset creation"""
-    ap = argparse.ArgumentParser(description="Create training datasets")
-    ap.add_argument('--config', required=True, help='Path to data configuration file')
+    ap = argparse.ArgumentParser(description="Prepare training-ready datasets from features")
+    ap.add_argument('--config', required=True, help='Path to data config file')
     args = ap.parse_args()
-    
-    # Load configuration
-    with open(args.config, 'r') as f:
-        cfg = yaml.safe_load(f)
-    
-    # Load features
-    features_dir = Path(cfg["paths"]["features"])
-    features_file = features_dir / "features.parquet"
-    
+
+    cfg = yaml.safe_load(open(args.config))
+
+    feat_dir = Path(cfg["paths"]["features"])
+    features_file = feat_dir / "features.parquet"
+
     if not features_file.exists():
-        raise FileNotFoundError(f"Features file not found: {features_file}. Run feature engineering first.")
-    
-    logger.info(f"Loading features from {features_file}")
+        raise SystemExit(f"❌ Features file not found: {features_file}. Run feature engineering first.")
+
+    print(f"Loading features from: {features_file}")
     df = pd.read_parquet(features_file)
-    
-    # Split by date
-    parts = split_by_date(df, cfg["splits"])
-    
-    # Get history length from config
-    history_T = cfg.get("history_T", 20)
-    
-    # Convert each split to tensors
+
+    print(f"Total rows: {len(df)}")
+    if 'ts' in df.columns:
+        print(f"Date range: {df['ts'].min()} to {df['ts'].max()}")
+
+    feature_cols = [
+        'best_bid', 'best_ask', 'spread', 'imbalance',
+        'microprice', 'mid_price', 'returns', 'volatility',
+        'bid_value', 'ask_value', 'bid_qty_1', 'ask_qty_1'
+    ]
+    feature_cols = [col for col in feature_cols if col in df.columns]
+    print(f"\nFeature columns ({len(feature_cols)}): {feature_cols}")
+
+    history_T = cfg.get('history_T', 20)
+    print(f"History window: {history_T} timesteps")
+
+    print("\n📅 Splitting data by date ranges...")
+    parts = split_by_date(df, cfg["splits"]) 
+
+    print(f"\n🔄 Creating time-series tensors with history={history_T}...")
     for name, part in parts.items():
-        if len(part) <= history_T:
-            logger.warning(f"Skipping {name} split: insufficient data ({len(part)} <= {history_T})")
+        if len(part) < history_T:
+            print(f"  ⚠️  Skipping {name}: not enough data (need {history_T}, have {len(part)})")
             continue
-        
-        tensors = to_tensors(part, history_T=history_T)
-        
-        # Save tensors
-        output_file = features_dir / f"{name}_tensors.npz"
-        np.savez_compressed(output_file, **tensors)
-        logger.info(f"Wrote tensors -> {output_file} (samples={len(tensors['X'])})")
-    
-    logger.info("Dataset creation completed successfully")
+        tensors = create_time_series_tensors(part, feature_cols, history_T=history_T)
+        out_file = feat_dir / f"{name}_tensors.npz"
+        np.savez_compressed(out_file, **tensors)
+        print(f"  ✓ {name:>5} → {out_file.name}")
+        print(f"      Shape: X={tensors['X'].shape}, y={tensors['y'].shape}")
+
+    print(f"\n✅ Dataset preparation completed!")
+    print(f"   Output directory: {feat_dir}")
+    print(f"   Feature dimension: {len(feature_cols)}")
+    print(f"   History length: {history_T}")
 
 
 if __name__ == '__main__':

@@ -2,5 +2,6 @@
 Feature Engineering Module
 ==========================
 
-This module handles feature computation and engineering for market data.
+Utilities for computing trading features from raw market snapshots
+for HFT MARL training.
 """

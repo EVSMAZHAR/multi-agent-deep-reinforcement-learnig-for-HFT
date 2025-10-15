@@ -1,34 +1,32 @@
 # Feature Engineering Configuration
 # ==================================
-# Adapted from hft-marl-phase0 for hft-marl-complete
 
-# Orderbook depth levels to use
+# Number of order book levels to use
 K_levels: 10
 
-# Historical window length (number of timesteps)
+# History window length
 history_T: 20
 
-# Decision interval in milliseconds
+# Time resolution
 decision_ms: 100
 
-# Window sizes for technical indicators (in milliseconds)
+# Rolling window parameters (ms) and MAs
 windows:
-  # Order flow imbalance window
-  ofi_ms: 1000
-  # Realized volatility window
-  realised_vol_ms: 2000
-  # Fast moving average
-  fast: 10
-  # Slow moving average
-  slow: 30
+  ofi_ms: 1000           # Order flow imbalance window
+  realised_vol_ms: 2000  # Realized volatility window
+  fast: 10               # Fast moving average
+  slow: 30               # Slow moving average
 
 # Auxiliary features to compute
 aux:
-  - spread
-  - microprice
-  - imbalance
+  - spread               # Best ask - best bid
+  - microprice           # Volume-weighted mid-price
+  - imbalance            # Order book imbalance
   - mid_price
-  - returns
+  - returns              # Price returns
+  - volatility           # Rolling volatility
+  - bid_value            # Bid price * quantity
+  - ask_value            # Ask price * quantity
   - volatility_fast
   - volatility_slow
   - spread_ma_fast
@@ -40,16 +38,11 @@ aux:
 
 # Scaler configuration
 scaler:
-  # Type: 'robust' (median/IQR) or 'standard' (mean/std)
-  type: robust
-  # Fit on which split
-  fit_on: dev
+  type: robust           # 'robust' or 'standard'
+  fit_on: dev            # Split to fit on (if applicable)
 
-# Data paths
+# Paths
 paths:
-  # Features directory
-  features: "data/features"
-  # Interim data directory
-  interim: "data/interim"
-  # Processed data directory
-  processed: "data/processed"
+  features: data/features
+  interim: data/interim
+  processed: data/processed
