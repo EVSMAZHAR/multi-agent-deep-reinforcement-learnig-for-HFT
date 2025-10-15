@@ -1,16 +1,29 @@
 """
+<<<<<<< HEAD
+Data Ingestion Module for HFT MARL
+===================================
+
+This module ingests raw market data from simulators, combines them,
+and prepares interim data for feature engineering.
+=======
 Data Ingestion Module
 =====================
 
 Ingests raw market snapshots from simulators and consolidates them into
 a unified interim dataset for feature engineering.
 Adapted from hft-marl-phase0 for compatibility with enhanced environment.
+>>>>>>> origin/master
 """
 
 import argparse
 import yaml
 from pathlib import Path
 import pandas as pd
+<<<<<<< HEAD
+import numpy as np
+from typing import List, Dict, Any
+=======
+>>>>>>> origin/master
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -92,6 +105,51 @@ def save_consolidated_data(df: pd.DataFrame, output_path: Path):
 
 def main():
     """Main entry point for data ingestion"""
+<<<<<<< HEAD
+    parser = argparse.ArgumentParser(description="Ingest market data from simulators")
+    parser.add_argument('--config', required=True, help="Path to data configuration file")
+    
+    args = parser.parse_args()
+    
+    # Load configuration
+    with open(args.config, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Get paths from config
+    sim_dir = Path(config['paths']['sim'])
+    interim_dir = Path(config['paths']['interim'])
+    interim_dir.mkdir(parents=True, exist_ok=True)
+    
+    logger.info("=" * 60)
+    logger.info("DATA INGESTION PIPELINE")
+    logger.info("=" * 60)
+    logger.info(f"Simulator directory: {sim_dir}")
+    logger.info(f"Output directory: {interim_dir}")
+    
+    # Load simulator files
+    dataframes = load_simulator_files(sim_dir)
+    
+    # Combine and clean
+    df = combine_and_clean_data(dataframes)
+    
+    # Add basic features
+    df = add_basic_derived_features(df)
+    
+    # Save to interim
+    output_file = interim_dir / "snapshots.parquet"
+    df.to_parquet(output_file, index=False)
+    
+    # Print summary statistics
+    logger.info("=" * 60)
+    logger.info("INGESTION SUMMARY")
+    logger.info("=" * 60)
+    logger.info(f"Total rows: {len(df)}")
+    logger.info(f"Symbols: {df['symbol'].unique().tolist()}")
+    logger.info(f"Date range: {df['ts'].min()} to {df['ts'].max()}")
+    logger.info(f"Average spread (bps): {df['spread_bps'].mean():.2f}")
+    logger.info(f"Output file: {output_file}")
+    logger.info("=" * 60)
+=======
     ap = argparse.ArgumentParser(description="Ingest simulator data")
     ap.add_argument('--config', required=True, help='Path to data configuration file')
     args = ap.parse_args()
@@ -113,6 +171,7 @@ def main():
     
     logger.info("Data ingestion completed successfully")
 >>>>>>> cursor/integrate-data-collection-and-feature-engineering-b52d
+>>>>>>> origin/master
 
 
 if __name__ == '__main__':
