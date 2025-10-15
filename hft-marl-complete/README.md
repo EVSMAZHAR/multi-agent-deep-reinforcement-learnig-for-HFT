@@ -4,6 +4,14 @@ A comprehensive implementation of multi-agent reinforcement learning algorithms 
 
 ## 🚀 Features
 
+### Data Pipeline ⭐ NEW
+- **Data Collection**: Automated ingestion from simulator outputs or custom sources
+- **Feature Engineering**: Market microstructure features with technical indicators
+- **Temporal Sequences**: Automatic creation of time-series data for training
+- **Scaling & Normalization**: Robust scaling for financial data
+- **Synthetic Data**: Automatic fallback generation for testing
+- **Configuration**: Flexible YAML-based configuration system
+
 ### Core Algorithms
 - **Enhanced MADDPG**: Multi-Agent Deep Deterministic Policy Gradient with advanced features
 - **Enhanced MAPPO**: Multi-Agent Proximal Policy Optimization with coordination mechanisms
@@ -55,6 +63,8 @@ hft-marl-complete/
 │   ├── features.yaml              # Feature engineering configuration
 │   ├── training_config.yaml       # Training configuration
 │   └── environment_config.yaml    # Environment configuration
+├── scripts/
+│   └── prepare_data.sh             # Data pipeline script
 ├── data/                          # Data directory
 │   ├── sim/                       # Raw simulator output
 │   ├── interim/                   # Intermediate data
@@ -62,9 +72,13 @@ hft-marl-complete/
 ├── models/                        # Trained models
 ├── results/                       # Experiment results
 ├── logs/                         # Training logs
-├── main.py                       # Main entry point
-├── requirements.txt              # Dependencies
-└── README.md                     # This file
+├── tests/                         # Test suite
+│   └── test_data_pipeline.py      # Data pipeline tests
+├── main.py                        # Main entry point
+├── requirements.txt               # Dependencies
+├── DATA_PIPELINE.md               # Data pipeline docs
+├── INTEGRATION_SUMMARY.md         # Integration details
+└── README.md                      # This file
 ```
 
 ## 🛠️ Installation
@@ -112,6 +126,19 @@ The data preparation pipeline generates:
 - `data/features/features.parquet` - Engineered features
 - `data/features/scaler.json` - Feature scaling parameters
 - `data/features/*_tensors.npz` - Training-ready tensors (format: [N, T, F])
+
+**Alternative manual approach**:
+```bash
+# Automatic pipeline execution (recommended)
+./scripts/prepare_data.sh
+
+# Or run individual steps
+python src/data/ingest.py --config configs/data_pipeline.yaml
+python src/features/build_features.py --config configs/features.yaml
+python src/data/make_dataset.py --config configs/data_pipeline.yaml
+```
+
+**Note**: If no raw data exists, synthetic market data will be generated automatically.
 
 ### 2. Train a Model
 
@@ -226,6 +253,73 @@ python -m src.data.make_dataset --config configs/data_pipeline.yaml
 
 ## 📊 Configuration
 
+### Data Collection Configuration
+
+Edit `configs/data.yaml` to customize data pipeline:
+
+```yaml
+# Timezone and symbols
+timezone: UTC
+symbols: [SYMA, SYMB]
+
+# Temporal settings
+decision_ms: 100
+history_T: 20
+
+# Data paths
+paths:
+  sim: data/sim
+  interim: data/interim
+  features: data/features
+
+# Train/validation/test splits
+splits:
+  dev:
+    start: '2020-01-01'
+    end: '2021-12-31'
+  val:
+    start: '2022-01-01'
+    end: '2022-06-30'
+  test:
+    start: '2022-07-01'
+    end: '2022-12-31'
+
+# Scaling method
+scaling:
+  method: robust  # or 'standard'
+```
+
+### Feature Engineering Configuration
+
+Edit `configs/features.yaml` to customize features:
+
+```yaml
+# Feature computation
+history_T: 20
+decision_ms: 100
+
+# Technical indicator windows
+windows:
+  fast: 10
+  slow: 30
+  ofi_ms: 1000
+  realised_vol_ms: 2000
+
+# Features to compute
+aux:
+  - spread
+  - microprice
+  - imbalance
+  - returns
+  - volatility_fast
+  - volatility_slow
+
+# Scaler configuration
+scaler:
+  type: robust  # 'robust' or 'standard'
+  fit_on: dev
+```
+
 ### Training Configuration
 
 Edit `configs/training_config.yaml` to customize:
@@ -289,6 +383,43 @@ reward_config:
 ```
 
 ## 🔬 Advanced Usage
+
+### Custom Data Pipeline
+
+```python
+from src.training.enhanced_training import DataManager, TrainingConfig
+
+# Create configuration
+config = TrainingConfig(
+    data_path="data",
+    features_path="data/features"
+)
+
+# Initialize data manager
+data_manager = DataManager(config)
+
+# Prepare data (with optional force rebuild)
+data_manager.prepare_data(force_rebuild=False)
+
+# Or run individual pipeline steps
+data_manager._create_synthetic_market_data()  # Generate synthetic data
+data_manager._build_features()                # Build features
+data_manager._create_datasets()              # Create train/val/test splits
+```
+
+### Adding Custom Features
+
+```python
+# Edit src/features/build_features.py
+def add_custom_features(df: pd.DataFrame) -> pd.DataFrame:
+    # Add your custom feature computation
+    df['my_feature'] = ...  # Your calculation
+    return df
+
+# Update configs/features.yaml
+aux:
+  - my_feature
+```
 
 ### Custom Environment
 
@@ -404,15 +535,22 @@ evaluator.plot_performance_comparison(
 
 ## 🧪 Testing
 
-Run the test suite:
+Run the complete test suite:
 
 ```bash
 pytest tests/ -v
 ```
 
-Run specific tests:
+Run specific test modules:
 
 ```bash
+# Test data pipeline
+python tests/test_data_pipeline.py
+
+# Test environment
+pytest tests/test_sanity.py -v
+
+# Test specific components
 pytest tests/test_environment.py -v
 pytest tests/test_algorithms.py -v
 pytest tests/test_baselines.py -v
@@ -420,17 +558,26 @@ pytest tests/test_baselines.py -v
 
 ## 📚 Documentation
 
+### Comprehensive Guides
+
+- **[DATA_PIPELINE.md](DATA_PIPELINE.md)**: Complete data pipeline documentation
+- **[INTEGRATION_SUMMARY.md](INTEGRATION_SUMMARY.md)**: Integration details and migration guide
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)**: Overall implementation summary
+
 ### API Reference
 
+- **Data Pipeline**: `src/data/` and `src/features/`
 - **Environment**: `src/marl/env_enhanced.py`
 - **Algorithms**: `src/marl/policies/`
 - **Baselines**: `src/baselines/comprehensive_baselines.py`
 - **Evaluation**: `src/evaluation/comprehensive_evaluation.py`
+- **Training**: `src/training/enhanced_training.py`
 
 ### Examples
 
 See the `examples/` directory for detailed usage examples:
 - Basic training example
+- Custom data pipeline setup
 - Custom environment setup
 - Baseline strategy implementation
 - Evaluation and comparison

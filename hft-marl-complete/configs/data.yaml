@@ -1,0 +1,52 @@
+# Data Collection and Processing Configuration
+# ============================================
+# Adapted from hft-marl-phase0 for hft-marl-complete
+
+# Timezone for data processing
+timezone: UTC
+
+# Symbols to process
+symbols:
+  - SYMA
+  - SYMB
+
+# Decision interval in milliseconds
+decision_ms: 100
+
+# Historical window length for sequences
+history_T: 20
+
+# Data paths
+paths:
+  # Raw simulator output
+  sim: data/sim
+  # Raw unprocessed data
+  raw: data/raw
+  # Interim processed data
+  interim: data/interim
+  # Final features for training
+  features: data/features
+
+# Train/validation/test splits by date
+splits:
+  # Development/training set
+  dev:
+    start: '2020-01-01'
+    end: '2021-12-31'
+  
+  # Validation set
+  val:
+    start: '2022-01-01'
+    end: '2022-06-30'
+  
+  # Test set
+  test:
+    start: '2022-07-01'
+    end: '2022-12-31'
+
+# Scaling configuration
+scaling:
+  # Scaling method: 'robust' or 'standard'
+  method: robust
+  # Scale by symbol and regime for better normalization
+  by: symbol_regime

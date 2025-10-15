@@ -1,5 +1,6 @@
 # Feature Engineering Configuration
 # ==================================
+# Adapted from hft-marl-phase0 for hft-marl-complete
 
 # Number of order book levels to use
 K_levels: 10
@@ -14,21 +15,31 @@ decision_ms: 100
 windows:
   ofi_ms: 1000  # Order flow imbalance window
   realised_vol_ms: 2000  # Realized volatility window
+  fast: 10  # Fast moving average
+  slow: 30  # Slow moving average
 
 # Auxiliary features to compute
 aux:
   - spread  # Best ask - best bid
   - microprice  # Volume-weighted mid-price
   - imbalance  # Order book imbalance
+  - mid_price  # Simple mid-price
   - returns  # Price returns
-  - volatility  # Rolling volatility
+  - volatility_fast  # Fast rolling volatility
+  - volatility_slow  # Slow rolling volatility
+  - spread_ma_fast  # Fast spread moving average
+  - spread_ma_slow  # Slow spread moving average
+  - imbalance_ma_fast  # Fast imbalance moving average
+  - imbalance_ma_slow  # Slow imbalance moving average
+  - volume_ma_fast  # Fast volume moving average
+  - volume_ma_slow  # Slow volume moving average
   - bid_value  # Bid price * quantity
   - ask_value  # Ask price * quantity
 
 # Scaler configuration
 scaler:
   type: robust  # 'robust' or 'standard'
-  fit_on: train  # Fit scaler on training data
+  fit_on: dev  # Fit scaler on development data
 
 # Paths
 paths:
