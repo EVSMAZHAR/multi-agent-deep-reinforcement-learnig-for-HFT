@@ -1,0 +1,50 @@
+# Data Pipeline Configuration for HFT-MARL
+# =========================================
+# This configuration controls the entire data pipeline from simulation to training-ready tensors
+
+# Timezone and symbols
+timezone: UTC
+symbols:
+  - SYMA
+
+# Simulation parameters
+num_samples: 10000  # Number of market snapshots to generate
+tick_ms: 100  # Milliseconds between snapshots
+tick_size: 0.01
+lot_size: 100
+
+# Market parameters for simulation
+volatility: 0.02
+mean_reversion_speed: 0.05
+spread_target_bps: 5  # Basis points
+seed: 42
+
+# Time-series parameters
+history_T: 20  # Number of timesteps in history window for LSTM/Transformer
+
+# Data paths
+paths:
+  sim: data/sim  # Raw simulator output
+  raw: data/raw  # Raw market data (if using real data)
+  interim: data/interim  # Consolidated snapshots
+  features: data/features  # Engineered features and tensors
+
+# Data splits (for train/val/test)
+splits:
+  train:
+    start: '2020-01-01'
+    end: '2020-09-30'
+  dev:
+    start: '2020-10-01'
+    end: '2020-11-30'
+  val:
+    start: '2020-12-01'
+    end: '2020-12-15'
+  test:
+    start: '2020-12-16'
+    end: '2020-12-31'
+
+# Feature engineering
+scaler:
+  type: robust  # 'robust' (median/IQR) or 'standard' (mean/std)
+  fit_on: train  # Which split to fit scaler on

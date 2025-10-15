@@ -1,0 +1,37 @@
+# Feature Engineering Configuration
+# ==================================
+
+# Number of order book levels to use
+K_levels: 10
+
+# History window length
+history_T: 20
+
+# Time resolution
+decision_ms: 100
+
+# Rolling window parameters
+windows:
+  ofi_ms: 1000  # Order flow imbalance window
+  realised_vol_ms: 2000  # Realized volatility window
+
+# Auxiliary features to compute
+aux:
+  - spread  # Best ask - best bid
+  - microprice  # Volume-weighted mid-price
+  - imbalance  # Order book imbalance
+  - returns  # Price returns
+  - volatility  # Rolling volatility
+  - bid_value  # Bid price * quantity
+  - ask_value  # Ask price * quantity
+
+# Scaler configuration
+scaler:
+  type: robust  # 'robust' or 'standard'
+  fit_on: train  # Fit scaler on training data
+
+# Paths
+paths:
+  features: data/features
+  interim: data/interim
+  processed: data/processed
