@@ -7,6 +7,7 @@ This script provides the main entry point for the comprehensive multi-agent
 reinforcement learning system for high-frequency trading.
 
 Usage:
+    python main.py prepare-data --config configs/data_pipeline.yaml
     python main.py train --algorithm maddpg --episodes 10000
     python main.py train --config configs/training_config.yaml
     python main.py evaluate --model models/maddpg_final.pt
@@ -21,6 +22,7 @@ import sys
 import yaml
 import torch
 import numpy as np
+import subprocess
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -50,6 +52,155 @@ def setup_directories():
         Path(directory).mkdir(parents=True, exist_ok=True)
     
     print("✓ Directory structure created successfully")
+
+
+def prepare_data_command(args):
+    """Execute data preparation pipeline"""
+    print("🔄 Starting Data Preparation Pipeline")
+    print("=" * 50)
+    
+    # Load configuration
+    config_path = args.config if args.config else "configs/data_pipeline.yaml"
+    
+    if not Path(config_path).exists():
+        print(f"❌ Config file not found: {config_path}")
+        print("Creating default configuration...")
+        setup_directories()
+        create_default_data_config(config_path)
+    
+    print(f"Using config: {config_path}")
+    
+    # Setup directories
+    setup_directories()
+    
+    # Step 1: Run simulators
+    print("\n📊 Step 1/4: Running market simulators...")
+    print("-" * 50)
+    
+    try:
+        # Run ABIDES simulator
+        print("Running ABIDES simulator...")
+        result = subprocess.run([
+            sys.executable, "-m", "src.sim.run_abides",
+            "--config", config_path,
+            "--out", "data/sim"
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(result.stdout)
+        else:
+            print(f"⚠️  ABIDES simulation warning: {result.stderr}")
+        
+        # Run JAX-LOB simulator
+        print("Running JAX-LOB simulator...")
+        result = subprocess.run([
+            sys.executable, "-m", "src.sim.run_jaxlob",
+            "--config", config_path,
+            "--out", "data/sim"
+        ], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(result.stdout)
+        else:
+            print(f"⚠️  JAX-LOB simulation warning: {result.stderr}")
+        
+    except Exception as e:
+        print(f"⚠️  Simulator error: {e}")
+        print("Continuing with existing data if available...")
+    
+    # Step 2: Ingest data
+    print("\n📥 Step 2/4: Ingesting market data...")
+    print("-" * 50)
+    
+    try:
+        result = subprocess.run([
+            sys.executable, "-m", "src.data.ingest",
+            "--config", config_path
+        ], capture_output=True, text=True, check=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Data ingestion failed: {e.stderr}")
+        return
+    
+    # Step 3: Build features
+    print("\n🔨 Step 3/4: Building features...")
+    print("-" * 50)
+    
+    try:
+        result = subprocess.run([
+            sys.executable, "-m", "src.features.build_features",
+            "--config", config_path
+        ], capture_output=True, text=True, check=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Feature engineering failed: {e.stderr}")
+        return
+    
+    # Step 4: Prepare datasets
+    print("\n📦 Step 4/4: Preparing training datasets...")
+    print("-" * 50)
+    
+    try:
+        result = subprocess.run([
+            sys.executable, "-m", "src.data.make_dataset",
+            "--config", config_path
+        ], capture_output=True, text=True, check=True)
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Dataset preparation failed: {e.stderr}")
+        return
+    
+    print("\n" + "=" * 50)
+    print("✅ Data preparation pipeline completed successfully!")
+    print("=" * 50)
+    print("\n📁 Generated files:")
+    print("  - data/sim/*_snapshots*.parquet  (raw market snapshots)")
+    print("  - data/interim/snapshots.parquet  (consolidated snapshots)")
+    print("  - data/features/features.parquet  (engineered features)")
+    print("  - data/features/scaler.json       (feature scaling parameters)")
+    print("  - data/features/*_tensors.npz     (training-ready tensors)")
+    print("\n💡 Next steps:")
+    print("  1. Review the generated data in data/features/")
+    print("  2. Train a model: python main.py train --algorithm maddpg")
+
+
+def create_default_data_config(config_path: str):
+    """Create a default data pipeline configuration"""
+    default_config = {
+        'timezone': 'UTC',
+        'symbols': ['SYMA'],
+        'num_samples': 10000,
+        'tick_ms': 100,
+        'tick_size': 0.01,
+        'lot_size': 100,
+        'volatility': 0.02,
+        'mean_reversion_speed': 0.05,
+        'spread_target_bps': 5,
+        'seed': 42,
+        'history_T': 20,
+        'paths': {
+            'sim': 'data/sim',
+            'raw': 'data/raw',
+            'interim': 'data/interim',
+            'features': 'data/features'
+        },
+        'splits': {
+            'train': {'start': '2020-01-01', 'end': '2020-09-30'},
+            'dev': {'start': '2020-10-01', 'end': '2020-11-30'},
+            'val': {'start': '2020-12-01', 'end': '2020-12-15'},
+            'test': {'start': '2020-12-16', 'end': '2020-12-31'}
+        },
+        'scaler': {
+            'type': 'robust',
+            'fit_on': 'train'
+        }
+    }
+    
+    Path(config_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(config_path, 'w') as f:
+        yaml.dump(default_config, f, default_flow_style=False, sort_keys=False)
+    
+    print(f"✓ Created default config: {config_path}")
 
 
 def train_command(args):
@@ -362,6 +513,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  python main.py prepare-data --config configs/data_pipeline.yaml
   python main.py train --algorithm maddpg --episodes 10000
   python main.py train --config configs/training_config.yaml
   python main.py evaluate --model models/maddpg_final.pt
@@ -371,6 +523,10 @@ Examples:
     )
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    
+    # Prepare data command
+    data_parser = subparsers.add_parser('prepare-data', help='Prepare training data from market simulations')
+    data_parser.add_argument('--config', type=str, help='Data pipeline configuration file path')
     
     # Train command
     train_parser = subparsers.add_parser('train', help='Train a model')
@@ -402,7 +558,9 @@ Examples:
         return
     
     try:
-        if args.command == 'train':
+        if args.command == 'prepare-data':
+            prepare_data_command(args)
+        elif args.command == 'train':
             train_command(args)
         elif args.command == 'evaluate':
             evaluate_command(args)
@@ -415,7 +573,7 @@ Examples:
             parser.print_help()
     
     except KeyboardInterrupt:
-        print("\n⚠️  Training interrupted by user")
+        print("\n⚠️  Process interrupted by user")
     except Exception as e:
         print(f"❌ Error: {e}")
         import traceback
